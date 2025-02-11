@@ -1,0 +1,8 @@
+<library path="pd_controller_franka_panda_with_compensation">
+        <class name="pd_controller_franka_panda_with_compensation/PDFrankaPandaControllerCompensation"
+           type="pd_controller_franka_panda_with_compensation::PDFrankaPandaControllerCompensation" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The joint impedance using pd control with gravity and corolloisis force compensation and commands torques based on joint impedance control law.
+        </description>
+    </class>
+</library>
