@@ -156,13 +156,19 @@ PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
       q_goal(i)     = input_ref_.readFromNonRT()->get()->values.at(i);
       q_dot_goal(i) = input_ref_.readFromNonRT()->get()->values_dot.at(i);
 
-      cor_comp_(i)     = franka_robot_model_->getCoriolisForceVector()[i];
-      gravity_comp_(i) = franka_robot_model_->getGravityForceVector()[i];
+      if (!simulation)
+      {
+        cor_comp_(i)     = franka_robot_model_->getCoriolisForceVector()[i];
+        gravity_comp_(i) = franka_robot_model_->getGravityForceVector()[i];
+      }
     }
 
-    tau_d_calculated = m_p_gain_val_.cwiseProduct(q_goal - q_) +
-                       m_d_gain_val_.cwiseProduct(q_dot_goal - dq_) + gravity_comp_ +
-                       cor_comp_.cwiseProduct(dq_);
+    tau_d_calculated =
+      m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(q_dot_goal - dq_);
+    if (!simulation)
+    {
+      tau_d_calculated = +gravity_comp_ + cor_comp_.cwiseProduct(dq_);
+    }
   }
   else
   {
