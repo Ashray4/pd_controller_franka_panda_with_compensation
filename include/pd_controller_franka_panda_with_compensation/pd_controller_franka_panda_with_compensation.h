@@ -60,6 +60,9 @@ private:
   Vector7d dq_filtered_;
   Vector7d m_p_gain_val_;
   Vector7d m_d_gain_val_;
+  Vector7d gravity_comp_;
+  Vector7d cor_comp_;
+
   // reference subscriber and buffer
   rclcpp::Subscription<ControllerReferenceMsg>::SharedPtr ref_subscriber_ = nullptr;
   realtime_tools::RealtimeBuffer<std::shared_ptr<ControllerReferenceMsg>> input_ref_;
@@ -67,6 +70,9 @@ private:
   // robot_model
   std::unique_ptr<franka_semantic_components::FrankaRobotModel> franka_robot_model_;
   void updateJointStates();
+
+  const std::string k_robot_state_interface_name{"robot_state"};
+  const std::string k_robot_model_interface_name{"robot_model"};
 };
 }  // namespace pd_controller_franka_panda_with_compensation
 #endif  // PD_CONTROLLER_FRANKA_PANDA_WITH_COMPENSATION_H_INCLUDED
