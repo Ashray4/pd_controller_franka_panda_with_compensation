@@ -27,6 +27,14 @@ PDFrankaPandaControllerCompensation::state_interface_configuration() const
   {
     config.names.push_back(m_arm_id_ + "_joint" + std::to_string(i) + "/position");
     config.names.push_back(m_arm_id_ + "_joint" + std::to_string(i) + "/velocity");
+
+    if (!simulation)
+    {
+      for (const auto& franka_robot_model_name : franka_robot_model_->get_state_interface_names())
+      {
+        config.names.push_back(franka_robot_model_name);
+      }
+    }
   }
   return config;
 }
@@ -38,6 +46,7 @@ controller_interface::CallbackReturn PDFrankaPandaControllerCompensation::on_ini
     rec = false;
 
     auto_declare<std::string>("arm_id", "");
+    auto_declare<bool>("simulation", true);
     auto_declare<std::vector<double> >("p_gains", {});
     auto_declare<std::vector<double> >("d_gains", {});
     // do we need robot description?
@@ -144,12 +153,16 @@ PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
   {
     for (int i = 0; i < m_num_joints_; ++i)
     {
-      q_goal(i)     = input_ref_.readFromRT()->get()->values.at(i);
-      q_dot_goal(i) = input_ref_.readFromRT()->get()->values_dot.at(i);
+      q_goal(i)     = input_ref_.readFromNonRT()->get()->values.at(i);
+      q_dot_goal(i) = input_ref_.readFromNonRT()->get()->values_dot.at(i);
+
+      cor_comp_(i)     = franka_robot_model_->getCoriolisForceVector()[i];
+      gravity_comp_(i) = franka_robot_model_->getGravityForceVector()[i];
     }
 
-    tau_d_calculated =
-      m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(q_dot_goal - dq_);
+    tau_d_calculated = m_p_gain_val_.cwiseProduct(q_goal - q_) +
+                       m_d_gain_val_.cwiseProduct(q_dot_goal - dq_) + gravity_comp_ +
+                       cor_comp_.cwiseProduct(dq_);
   }
   else
   {
@@ -161,9 +174,9 @@ PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
   }
 
   for (int i = 0; i < m_num_joints_; ++i)
-    {
-      command_interfaces_[i].set_value(tau_d_calculated(i));
-    }
+  {
+    command_interfaces_[i].set_value(tau_d_calculated(i));
+  }
 
   return controller_interface::return_type::OK;
 }
@@ -195,7 +208,7 @@ void PDFrankaPandaControllerCompensation::home_pos_cb(
   const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
   const std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
-  rec = false;
+  rec               = false;
   response->success = true;
 }
 
