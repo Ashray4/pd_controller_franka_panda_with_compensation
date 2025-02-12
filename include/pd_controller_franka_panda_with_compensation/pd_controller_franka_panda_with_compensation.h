@@ -17,6 +17,7 @@
 
 #include <franka_semantic_components/franka_robot_model.hpp>
 
+#include <std_srvs/srv/trigger.hpp>
 #include <Eigen/Eigen>
 
 using Vector7d = Eigen::Matrix<double, 7, 1>;
@@ -39,6 +40,8 @@ public:
   controller_interface::return_type update(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
   void ref_state_callback(const control_msgs::msg::MultiDOFCommand::SharedPtr ref_state);
+  void home_pos_cb(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+               const std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
   using ControllerReferenceMsg = control_msgs::msg::MultiDOFCommand;
 
@@ -63,6 +66,9 @@ private:
   // reference subscriber and buffer
   rclcpp::Subscription<ControllerReferenceMsg>::SharedPtr ref_subscriber_ = nullptr;
   realtime_tools::RealtimeBuffer<std::shared_ptr<ControllerReferenceMsg>> input_ref_;
+
+  //services to zero position
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr home_pos;
 
   // robot_model
   std::unique_ptr<franka_semantic_components::FrankaRobotModel> franka_robot_model_;

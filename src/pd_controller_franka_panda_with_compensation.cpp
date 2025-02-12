@@ -3,8 +3,7 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
-namespace pd_controller_franka_panda_with_compensation
-{
+namespace pd_controller_franka_panda_with_compensation {
 
 controller_interface::InterfaceConfiguration
 PDFrankaPandaControllerCompensation::command_interface_configuration() const
@@ -19,7 +18,8 @@ PDFrankaPandaControllerCompensation::command_interface_configuration() const
   return config;
 }
 
-controller_interface::InterfaceConfiguration PDFrankaPandaControllerCompensation::state_interface_configuration() const
+controller_interface::InterfaceConfiguration
+PDFrankaPandaControllerCompensation::state_interface_configuration() const
 {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
@@ -38,8 +38,8 @@ controller_interface::CallbackReturn PDFrankaPandaControllerCompensation::on_ini
     rec = false;
 
     auto_declare<std::string>("arm_id", "");
-    auto_declare<std::vector<double>>("p_gains", {});
-    auto_declare<std::vector<double>>("d_gains", {});
+    auto_declare<std::vector<double> >("p_gains", {});
+    auto_declare<std::vector<double> >("d_gains", {});
     // do we need robot description?
   }
   catch (const std::exception& e)
@@ -56,7 +56,7 @@ PDFrankaPandaControllerCompensation::on_configure(const rclcpp_lifecycle::State&
   // assign parameters
   m_num_joints_ = 7;
   dq_filtered_.setZero();
-  m_arm_id_ = get_node()->get_parameter("arm_id").as_string();
+  m_arm_id_   = get_node()->get_parameter("arm_id").as_string();
   auto p_gain = get_node()->get_parameter("p_gains").as_double_array();
   auto d_gain = get_node()->get_parameter("d_gains").as_double_array();
 
@@ -67,7 +67,9 @@ PDFrankaPandaControllerCompensation::on_configure(const rclcpp_lifecycle::State&
   }
   if (p_gain.size() != static_cast<uint>(m_num_joints_))
   {
-    RCLCPP_FATAL(get_node()->get_logger(), "m_p_gain_val_ should be of size %d but is of size %ld", m_num_joints_,
+    RCLCPP_FATAL(get_node()->get_logger(),
+                 "m_p_gain_val_ should be of size %d but is of size %ld",
+                 m_num_joints_,
                  m_p_gain_val_.size());
     return CallbackReturn::FAILURE;
   }
@@ -78,7 +80,9 @@ PDFrankaPandaControllerCompensation::on_configure(const rclcpp_lifecycle::State&
   }
   if (d_gain.size() != static_cast<uint>(m_num_joints_))
   {
-    RCLCPP_FATAL(get_node()->get_logger(), "m_d_gain_val_ should be of size %d but is of size %ld", m_num_joints_,
+    RCLCPP_FATAL(get_node()->get_logger(),
+                 "m_d_gain_val_ should be of size %d but is of size %ld",
+                 m_num_joints_,
                  m_d_gain_val_.size());
     return CallbackReturn::FAILURE;
   }
@@ -91,12 +95,23 @@ PDFrankaPandaControllerCompensation::on_configure(const rclcpp_lifecycle::State&
 
   // robot model
   franka_robot_model_ = std::make_unique<franka_semantic_components::FrankaRobotModel>(
-      franka_semantic_components::FrankaRobotModel(m_arm_id_ + "/" + "robot_state", m_arm_id_ + "/" + "robot_model"));
+    franka_semantic_components::FrankaRobotModel(m_arm_id_ + "/" + "robot_state",
+                                                 m_arm_id_ + "/" + "robot_model"));
+
+  home_pos = get_node()->create_service<std_srvs::srv::Trigger>(
+    "~/home_pos",
+    [&](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+      home_pos_cb(request, response);
+    });
+
 
   // reference state subscriber
   ref_subscriber_ = get_node()->create_subscription<control_msgs::msg::MultiDOFCommand>(
-      m_arm_id_ + "/reference", rclcpp::SystemDefaultsQoS(),
-      std::bind(&PDFrankaPandaControllerCompensation::ref_state_callback, this, std::placeholders::_1));
+    m_arm_id_ + "/reference",
+    rclcpp::SystemDefaultsQoS(),
+    std::bind(
+      &PDFrankaPandaControllerCompensation::ref_state_callback, this, std::placeholders::_1));
 
   RCLCPP_DEBUG(get_node()->get_logger(), "configured successfully");
   return CallbackReturn::SUCCESS;
@@ -111,51 +126,50 @@ PDFrankaPandaControllerCompensation::on_activate(const rclcpp_lifecycle::State& 
   return CallbackReturn::SUCCESS;
 }
 
-controller_interface::CallbackReturn
-PDFrankaPandaControllerCompensation::on_deactivate(const rclcpp_lifecycle::State& /*previous_state*/)
+controller_interface::CallbackReturn PDFrankaPandaControllerCompensation::on_deactivate(
+  const rclcpp_lifecycle::State& /*previous_state*/)
 {
   franka_robot_model_->release_interfaces();
   return CallbackReturn::SUCCESS;
 }
 
-controller_interface::return_type PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
-                                                                              const rclcpp::Duration& period)
+controller_interface::return_type
+PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
+                                            const rclcpp::Duration& period)
 {
   updateJointStates();
 
+  // implement as an action similar to joint_velocity_change
   if (rec)
   {
     for (int i = 0; i < m_num_joints_; ++i)
     {
-      q_goal(i) = input_ref_.readFromNonRT()->get()->values.at(i);
-      q_dot_goal(i) = input_ref_.readFromNonRT()->get()->values_dot.at(i);
+      q_goal(i)     = input_ref_.readFromRT()->get()->values.at(i);
+      q_dot_goal(i) = input_ref_.readFromRT()->get()->values_dot.at(i);
     }
 
-    tau_d_calculated = m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(q_dot_goal - dq_);
-    for (int i = 0; i < m_num_joints_; ++i)
-    {
-      command_interfaces_[i].set_value(tau_d_calculated(i));
-    }
+    tau_d_calculated =
+      m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(q_dot_goal - dq_);
   }
   else
-  { 
-
-    q_goal = initial_q_;
+  {
+    q_goal              = initial_q_;
     const double kAlpha = 0.99;
-    dq_filtered_ = (1 - kAlpha) * dq_filtered_ + kAlpha * dq_;
-    tau_d_calculated = m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(-dq_filtered_);
-    for (int i = 0; i < m_num_joints_; ++i)
+    dq_filtered_        = (1 - kAlpha) * dq_filtered_ + kAlpha * dq_;
+    tau_d_calculated =
+      m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(-dq_filtered_);
+  }
+
+  for (int i = 0; i < m_num_joints_; ++i)
     {
       command_interfaces_[i].set_value(tau_d_calculated(i));
-          RCLCPP_INFO(get_node()->get_logger(), "Sent command for joint %d: %f",i,command_interfaces_[i].get_value());
     }
-  }
 
   return controller_interface::return_type::OK;
 }
 
 void PDFrankaPandaControllerCompensation::ref_state_callback(
-    const control_msgs::msg::MultiDOFCommand::SharedPtr ref_state)
+  const control_msgs::msg::MultiDOFCommand::SharedPtr ref_state)
 {
   (void)ref_state;
   input_ref_.writeFromNonRT(ref_state);
@@ -172,14 +186,24 @@ void PDFrankaPandaControllerCompensation::updateJointStates()
     assert(position_interface.get_interface_name() == "position");
     assert(velocity_interface.get_interface_name() == "velocity");
 
-    q_(i) = position_interface.get_value();
+    q_(i)  = position_interface.get_value();
     dq_(i) = velocity_interface.get_value();
   }
 }
 
-}  // namespace pd_controller_franka_panda_with_compensation
+void PDFrankaPandaControllerCompensation::home_pos_cb(
+  const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+  const std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+  rec = false;
+  response->success = true;
+}
+
+} // namespace pd_controller_franka_panda_with_compensation
+
 
 #include "pluginlib/class_list_macros.hpp"
 // NOLINTNEXTLINE
-PLUGINLIB_EXPORT_CLASS(pd_controller_franka_panda_with_compensation::PDFrankaPandaControllerCompensation,
-                       controller_interface::ControllerInterface)
+PLUGINLIB_EXPORT_CLASS(
+  pd_controller_franka_panda_with_compensation::PDFrankaPandaControllerCompensation,
+  controller_interface::ControllerInterface)

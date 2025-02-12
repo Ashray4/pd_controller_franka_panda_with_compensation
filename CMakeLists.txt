@@ -25,6 +25,7 @@ find_package(Eigen3 REQUIRED)
 find_package(franka_semantic_components REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(control_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_library(
         ${PROJECT_NAME}
@@ -46,6 +47,7 @@ ament_target_dependencies(
         franka_semantic_components
         realtime_tools
         control_msgs
+        std_srvs
 )
 
 pluginlib_export_plugin_description_file(
