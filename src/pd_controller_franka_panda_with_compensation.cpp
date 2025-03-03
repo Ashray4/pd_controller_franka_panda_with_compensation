@@ -66,6 +66,7 @@ PDFrankaPandaControllerCompensation::on_configure(const rclcpp_lifecycle::State&
   m_num_joints_ = 7;
   dq_filtered_.setZero();
   m_arm_id_   = get_node()->get_parameter("arm_id").as_string();
+  simulation = get_node()->get_parameter("simulation").as_bool();
   auto p_gain = get_node()->get_parameter("p_gains").as_double_array();
   auto d_gain = get_node()->get_parameter("d_gains").as_double_array();
 
@@ -167,7 +168,7 @@ PDFrankaPandaControllerCompensation::update(const rclcpp::Time& /*time*/,
       m_p_gain_val_.cwiseProduct(q_goal - q_) + m_d_gain_val_.cwiseProduct(q_dot_goal - dq_);
     if (!simulation)
     {
-      tau_d_calculated = +gravity_comp_ + cor_comp_.cwiseProduct(dq_);
+      tau_d_calculated += gravity_comp_ + cor_comp_.cwiseProduct(dq_);
     }
   }
   else

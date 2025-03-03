@@ -1,9 +1,9 @@
 #ifndef PD_CONTROLLER_FRANKA_PANDA_WITH_COMPENSATION_H_INCLUDED
 #define PD_CONTROLLER_FRANKA_PANDA_WITH_COMPENSATION_H_INCLUDED
 
-#include <vector>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <controller_interface/controller_interface.hpp>
 #include <controller_interface/controller_interface_base.hpp>
@@ -17,13 +17,12 @@
 
 #include <franka_semantic_components/franka_robot_model.hpp>
 
-#include <std_srvs/srv/trigger.hpp>
 #include <Eigen/Eigen>
+#include <std_srvs/srv/trigger.hpp>
 
 using Vector7d = Eigen::Matrix<double, 7, 1>;
 
-namespace pd_controller_franka_panda_with_compensation
-{
+namespace pd_controller_franka_panda_with_compensation {
 class PDFrankaPandaControllerCompensation : public controller_interface::ControllerInterface
 {
 public:
@@ -33,15 +32,19 @@ public:
   controller_interface::InterfaceConfiguration state_interface_configuration() const override;
 
   controller_interface::CallbackReturn on_init() override;
-  controller_interface::CallbackReturn on_configure(const rclcpp_lifecycle::State& previous_state) override;
-  controller_interface::CallbackReturn on_activate(const rclcpp_lifecycle::State& previous_state) override;
-  controller_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
+  controller_interface::CallbackReturn
+  on_configure(const rclcpp_lifecycle::State& previous_state) override;
+  controller_interface::CallbackReturn
+  on_activate(const rclcpp_lifecycle::State& previous_state) override;
+  controller_interface::CallbackReturn
+  on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
-  controller_interface::return_type update(const rclcpp::Time& time, const rclcpp::Duration& period) override;
+  controller_interface::return_type update(const rclcpp::Time& time,
+                                           const rclcpp::Duration& period) override;
 
   void ref_state_callback(const control_msgs::msg::MultiDOFCommand::SharedPtr ref_state);
   void home_pos_cb(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-               const std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+                   const std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
   using ControllerReferenceMsg = control_msgs::msg::MultiDOFCommand;
 
@@ -52,6 +55,7 @@ private:
   std::vector<std::string> m_state_interfaces_names_;
   std::string m_command_interface_name_;
   bool rec;
+  bool simulation;
 
   // eigen vectors
   Vector7d q_;
@@ -63,16 +67,19 @@ private:
   Vector7d dq_filtered_;
   Vector7d m_p_gain_val_;
   Vector7d m_d_gain_val_;
+  Vector7d gravity_comp_;
+  Vector7d cor_comp_;
+
   // reference subscriber and buffer
   rclcpp::Subscription<ControllerReferenceMsg>::SharedPtr ref_subscriber_ = nullptr;
-  realtime_tools::RealtimeBuffer<std::shared_ptr<ControllerReferenceMsg>> input_ref_;
+  realtime_tools::RealtimeBuffer<std::shared_ptr<ControllerReferenceMsg> > input_ref_;
 
-  //services to zero position
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr home_pos;
+  // services to zero position
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr home_pos;
 
   // robot_model
   std::unique_ptr<franka_semantic_components::FrankaRobotModel> franka_robot_model_;
   void updateJointStates();
 };
-}  // namespace pd_controller_franka_panda_with_compensation
-#endif  // PD_CONTROLLER_FRANKA_PANDA_WITH_COMPENSATION_H_INCLUDED
+} // namespace pd_controller_franka_panda_with_compensation
+#endif // PD_CONTROLLER_FRANKA_PANDA_WITH_COMPENSATION_H_INCLUDED
